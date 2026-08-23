@@ -1,0 +1,6 @@
+{
+  "name": "Maths Learning PWA",
+  "description": "A multilingual, interactive mathematics learning and classroom presentation Progressive Web App for tables 2-20, Indian place values, number games, and speech recitation.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
