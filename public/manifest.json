@@ -1,6 +1,6 @@
 {
-  "name": "Maths Learning PWA - Tables & Numbers",
-  "short_name": "Maths PWA",
+  "name": "Smart Maths (Table and Numbers)",
+  "short_name": "Smart Maths",
   "description": "Interactive Mathematics Learning for Tables, Place Value and Fun Games",
   "start_url": "/",
   "display": "standalone",

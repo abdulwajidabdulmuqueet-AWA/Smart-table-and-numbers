@@ -173,7 +173,7 @@ export interface AppTranslation {
 
 export const translations: Record<Language, AppTranslation> = {
   en: {
-    appTitle: 'Maths Learning PWA',
+    appTitle: 'Smart Maths (Table and Numbers)',
     appSubtitle: 'Interactive Mathematics for Classrooms & Smart Boards',
     tagline: 'Visual, Engaging & Fun Maths Mastery',
     

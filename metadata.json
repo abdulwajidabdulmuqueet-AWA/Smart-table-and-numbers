@@ -1,5 +1,5 @@
 {
-  "name": "Maths Learning PWA",
+  "name": "Smart Maths (Table and Numbers)",
   "description": "A multilingual, interactive mathematics learning and classroom presentation Progressive Web App for tables 2-20, Indian place values, number games, and speech recitation.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
