@@ -15,8 +15,10 @@ import {
   Eye, 
   CheckCircle2, 
   Sliders,
-  Award,
-  GraduationCap
+  ChevronDown,
+  ChevronUp,
+  FastForward,
+  Zap
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AppSettings, RhythmSpeed, UserProgress } from '../types';
@@ -59,6 +61,13 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
   const [rhythmAudioMode, setRhythmAudioMode] = useState<RhythmAudioMode>(settings.speechEnabled ? 'speech' : 'silent');
   const [isPresentationMode, setIsPresentationMode] = useState<boolean>(false);
   
+  // Auto-play next table option (defaults to true or settings value)
+  const [autoPlayNextTable, setAutoPlayNextTable] = useState<boolean>(settings.autoPlayNextTable ?? true);
+  const [nextTableTransition, setNextTableTransition] = useState<{ nextTable: number; countdown: number } | null>(null);
+  
+  // Selector collapsed/expanded state for compact single-screen viewing
+  const [isSelectorExpanded, setIsSelectorExpanded] = useState<boolean>(false);
+
   // Voice interactive mode
   const [isVoiceListening, setIsVoiceListening] = useState<boolean>(false);
   const [voiceFeedback, setVoiceFeedback] = useState<string>('');
@@ -75,15 +84,16 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
 
   const currentBeatDelay = beatDelays[settings.rhythmSpeed] || 750;
   const beatTimerRef = useRef<any>(null);
+  const transitionTimerRef = useRef<any>(null);
 
   const activeProduct = currentTable * activeStep;
 
   // Sound handler for specific beats
-  const handleBeatSound = (beat: 1 | 2 | 3, stepNum: number) => {
-    const prod = currentTable * stepNum;
+  const handleBeatSound = (beat: 1 | 2 | 3, stepNum: number, tableNum = currentTable) => {
+    const prod = tableNum * stepNum;
 
     if (rhythmAudioMode === 'speech') {
-      speechService.speakBeat(beat, currentTable, stepNum, prod, settings.language, settings.speechRate || 1.0);
+      speechService.speakBeat(beat, tableNum, stepNum, prod, settings.language, settings.speechRate || 1.0);
     } else if (rhythmAudioMode === 'metronome') {
       if (beat === 1) {
         sounds.playClick();
@@ -96,9 +106,17 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
     // 'silent' mode: no computer audio plays, allowing teacher or students to recite!
   };
 
+  // Toggle Auto-Play Next Table
+  const handleToggleAutoPlayNext = () => {
+    sounds.playClick();
+    const newVal = !autoPlayNextTable;
+    setAutoPlayNextTable(newVal);
+    updateSettings({ autoPlayNextTable: newVal });
+  };
+
   // Rhythm beat-by-beat progression engine
   useEffect(() => {
-    if (!isPlaying) {
+    if (!isPlaying || nextTableTransition !== null) {
       if (beatTimerRef.current) clearTimeout(beatTimerRef.current);
       return;
     }
@@ -126,8 +144,6 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
           handleBeatSound(1, nextStep);
         } else {
           // Table 1 to 10 completed!
-          setIsPlaying(false);
-          setActiveBeat(0);
           sounds.playLevelComplete();
           confetti({
             particleCount: 100,
@@ -136,6 +152,24 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
           });
           const updated = updateGameResults(true, currentTable);
           setProgress(updated);
+
+          // Check if Auto-Play Next Table is enabled
+          if (autoPlayNextTable && currentTable < 20) {
+            const nextT = currentTable + 1;
+            setNextTableTransition({ nextTable: nextT, countdown: 2 });
+            
+            // 1.8s delay before playing next table
+            transitionTimerRef.current = setTimeout(() => {
+              setNextTableTransition(null);
+              setSelectedTable(nextT);
+              setActiveStep(1);
+              setActiveBeat(1);
+              handleBeatSound(1, 1, nextT);
+            }, 1800);
+          } else {
+            setIsPlaying(false);
+            setActiveBeat(0);
+          }
         }
       }
     }, currentBeatDelay);
@@ -143,7 +177,27 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
     return () => {
       if (beatTimerRef.current) clearTimeout(beatTimerRef.current);
     };
-  }, [isPlaying, activeBeat, activeStep, currentBeatDelay, currentTable, rhythmAudioMode, settings.language, settings.speechRate]);
+  }, [isPlaying, activeBeat, activeStep, currentBeatDelay, currentTable, rhythmAudioMode, settings.language, settings.speechRate, autoPlayNextTable, nextTableTransition]);
+
+  // Handle immediate skip to next table during transition
+  const handleImmediateNextTable = () => {
+    if (!nextTableTransition) return;
+    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    const nextT = nextTableTransition.nextTable;
+    setNextTableTransition(null);
+    setSelectedTable(nextT);
+    setActiveStep(1);
+    setActiveBeat(1);
+    handleBeatSound(1, 1, nextT);
+  };
+
+  // Cancel next table transition and stop
+  const handleCancelNextTableTransition = () => {
+    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    setNextTableTransition(null);
+    setIsPlaying(false);
+    setActiveBeat(0);
+  };
 
   // Handle Play/Pause toggle
   const togglePlayPause = () => {
@@ -151,6 +205,10 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
     if (isPlaying) {
       // Pause
       setIsPlaying(false);
+      if (nextTableTransition) {
+        if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+        setNextTableTransition(null);
+      }
     } else {
       // Start or Resume
       setIsPlaying(true);
@@ -171,6 +229,9 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
       if (rhythmAudioMode !== 'silent') {
         handleBeatSound(1, next);
       }
+    } else if (currentTable < 20) {
+      // Next table
+      handleSelectTable(currentTable + 1);
     }
   };
 
@@ -183,11 +244,16 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
       if (rhythmAudioMode !== 'silent') {
         handleBeatSound(1, prev);
       }
+    } else if (currentTable > 2) {
+      // Previous table
+      handleSelectTable(currentTable - 1);
     }
   };
 
   const handleRestart = () => {
     sounds.playClick();
+    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    setNextTableTransition(null);
     setActiveStep(1);
     setActiveBeat(0);
     setIsPlaying(false);
@@ -195,6 +261,8 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
 
   const handleSelectTable = (num: number) => {
     sounds.playClick();
+    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    setNextTableTransition(null);
     setSelectedTable(num);
     setActiveStep(1);
     setActiveBeat(0);
@@ -230,14 +298,19 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
             setVoiceFeedback(`🎉 "${transcript}" ✓`);
             setTimeout(() => {
               if (activeStep < 10) {
-                const next = activeStep + 1;
-                setActiveStep(next);
+                const nextStep = activeStep + 1;
+                setActiveStep(nextStep);
                 setActiveBeat(1);
               } else {
                 speechService.stopListening();
                 setIsVoiceListening(false);
                 sounds.playLevelComplete();
                 confetti();
+                if (autoPlayNextTable && currentTable < 20) {
+                  setTimeout(() => {
+                    handleSelectTable(currentTable + 1);
+                  }, 1200);
+                }
               }
             }, 600);
           }
@@ -256,49 +329,115 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
       speechService.stopListening();
       speechService.stopSpeaking();
       if (beatTimerRef.current) clearTimeout(beatTimerRef.current);
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
     };
   }, []);
 
   const allTables = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
   return (
-    <div className={`max-w-7xl mx-auto px-3 sm:px-6 py-6 space-y-6 ${isUrdu ? 'font-urdu' : 'font-devanagari'}`}>
+    <div className={`max-w-7xl mx-auto px-2 sm:px-4 md:px-6 py-3 sm:py-4 space-y-3.5 ${isUrdu ? 'font-urdu' : 'font-devanagari'}`}>
       
-      {/* Top Header & Table Selection Matrix */}
-      <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-sm space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl sm:text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-              <span>{t.tablesHeading}</span>
-              <span className="px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-sm font-black">
-                {t.tableOf} {currentTable}
-              </span>
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-              {t.tablesSubtitle}
-            </p>
+      {/* Sleek Compact Header Bar with Table Quick Selector & Auto-Next Toggle */}
+      <div className="bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-slate-200 shadow-sm space-y-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white font-math font-black text-xl flex items-center justify-center shadow-sm flex-shrink-0">
+              {currentTable}
+            </span>
+            <div>
+              <h2 className="text-base sm:text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                <span>{t.tableOf} {currentTable}</span>
+                <span className="text-xs px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+                  2 - 20
+                </span>
+              </h2>
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium hidden sm:block">
+                {t.tablesSubtitle}
+              </p>
+            </div>
           </div>
 
-          {/* Smart Board Presentation Mode Button */}
-          <button
-            id="start-smartboard-presentation-btn"
-            onClick={() => {
-              sounds.playClick();
-              setIsPresentationMode(true);
-            }}
-            className="px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-sm shadow-md hover:shadow-indigo-200 hover:scale-102 active:scale-95 transition-all flex items-center justify-center gap-2.5"
-          >
-            <Tv className="w-5 h-5" />
-            <span>{t.startPresentation}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Auto Play Next Table Quick Toggle */}
+            <button
+              id="header-auto-next-toggle"
+              onClick={handleToggleAutoPlayNext}
+              title={t.autoPlayNextDesc}
+              className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-xs ${
+                autoPlayNextTable
+                  ? 'bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-200'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <FastForward className={`w-3.5 h-3.5 ${autoPlayNextTable ? 'text-emerald-600' : 'text-slate-400'}`} />
+              <span>
+                {isUrdu ? 'اگلا پہاڑہ آٹو پلے:' : settings.language === 'hi' ? 'अगला पहाड़ा:' : 'Auto Next Table:'}
+              </span>
+              <span className={`font-black ${autoPlayNextTable ? 'text-emerald-700' : 'text-slate-400'}`}>
+                {autoPlayNextTable ? 'ON ✓' : 'OFF'}
+              </span>
+            </button>
+
+            {/* Smart Board Presentation Mode Button */}
+            <button
+              id="start-smartboard-presentation-btn"
+              onClick={() => {
+                sounds.playClick();
+                setIsPresentationMode(true);
+              }}
+              className="px-3.5 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-xs sm:text-sm shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-95"
+            >
+              <Tv className="w-4 h-4" />
+              <span className="hidden md:inline">{t.startPresentation}</span>
+              <span className="md:hidden">Smart Board</span>
+            </button>
+
+            {/* Expand / Collapse All Tables Selector */}
+            <button
+              onClick={() => setIsSelectorExpanded(!isSelectorExpanded)}
+              className="p-1.5 sm:p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1"
+              title="All Tables 2-20"
+            >
+              <span className="text-[11px] hidden sm:inline">2-20</span>
+              {isSelectorExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
 
-        {/* Table Selector Cards (2 to 20) */}
-        <div>
-          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
-            {t.selectTable || 'Select a Table to Learn (2 - 20):'}
-          </div>
-          <div className="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-2">
+        {/* Compact Horizontal Quick-Picker (Takes minimal height so 10 lines fit on 1 screen) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+          <span className="text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap pl-0.5 pr-1">
+            {t.selectTable || 'Table:'}
+          </span>
+          {allTables.map((num) => {
+            const isSelected = currentTable === num;
+            const stars = progress?.tablesMastery?.[num] || 0;
+            return (
+              <button
+                key={num}
+                id={`compact-select-table-${num}`}
+                onClick={() => handleSelectTable(num)}
+                className={`flex-shrink-0 px-2.5 py-1 rounded-xl font-math font-black text-xs sm:text-sm transition-all flex items-center gap-1 border ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm scale-105 ring-2 ring-indigo-200'
+                    : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100 hover:border-slate-300'
+                }`}
+              >
+                <span>{num}</span>
+                {stars > 0 && (
+                  <span className="text-[9px] text-amber-400">
+                    {'★'.repeat(Math.min(stars, 3))}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Expanded Grid (Only when user expands) */}
+        {isSelectorExpanded && (
+          <div className="pt-2 border-t border-slate-100 grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-1.5 animate-in slide-in-from-top-2 duration-150">
             {allTables.map((num) => {
               const isSelected = currentTable === num;
               const stars = progress?.tablesMastery?.[num] || 0;
@@ -306,19 +445,18 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                 <button
                   key={num}
                   id={`select-table-${num}`}
-                  onClick={() => handleSelectTable(num)}
-                  className={`flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-2xl font-black transition-all border-2 ${
+                  onClick={() => {
+                    handleSelectTable(num);
+                    setIsSelectorExpanded(false);
+                  }}
+                  className={`flex flex-col items-center justify-center p-1.5 sm:p-2 rounded-xl font-black transition-all border ${
                     isSelected
-                      ? 'bg-indigo-600 text-white border-indigo-700 shadow-md scale-105 ring-4 ring-indigo-100'
-                      : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100 hover:border-slate-300'
+                      ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm ring-2 ring-indigo-100'
+                      : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
                   }`}
                 >
-                  <span className="text-[10px] uppercase font-bold opacity-75">
-                    {t.tableOf}
-                  </span>
-                  <span className="text-xl sm:text-2xl font-math my-0.5">
-                    {num}
-                  </span>
+                  <span className="text-[9px] uppercase font-bold opacity-75">{t.tableOf}</span>
+                  <span className="text-base sm:text-lg font-math font-black">{num}</span>
                   <div className="flex items-center gap-0.5 text-[8px] text-amber-400">
                     {'★'.repeat(stars)}
                   </div>
@@ -326,115 +464,155 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
               );
             })}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Main Interactive Teaching Board Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* Main Single-Screen Interactive Teaching Layout (Fits on 1 Screen!) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-5 items-start">
         
-        {/* Left Column: Active Beat Visual Equation & Full 10-Lines Stack */}
-        <div className="lg:col-span-7 space-y-6">
+        {/* Left Column: Active Beat Equation Banner + Full 10-Lines Table */}
+        <div className="lg:col-span-7 space-y-3.5">
           
-          {/* Active 3-Beat Rhythm Highlight Display Card */}
-          <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-indigo-700/50 space-y-5 relative overflow-hidden">
+          {/* SECTION 1: Active 3-Beat Rhythm Highlight Display Card (Circled in user photo) */}
+          <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 text-white shadow-lg border border-indigo-700/50 space-y-2.5 relative overflow-hidden">
+            
+            {/* Auto Next Table Countdown Notification Toast (When advancing to next table) */}
+            {nextTableTransition && (
+              <div className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-between gap-2 animate-bounce shadow-md">
+                <div className="flex items-center gap-2 text-xs sm:text-sm font-black">
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>
+                    {isUrdu 
+                      ? `🎉 پہاڑہ ${currentTable} مکمل! اگلا پہاڑہ ${nextTableTransition.nextTable} شروع ہو رہا ہے...`
+                      : settings.language === 'hi'
+                      ? `🎉 पहाड़ा ${currentTable} पूरा! अगला पहाड़ा ${nextTableTransition.nextTable} शुरू हो रहा है...`
+                      : `🎉 Table ${currentTable} Complete! Starting Table ${nextTableTransition.nextTable}...`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleImmediateNextTable}
+                    className="px-2.5 py-1 rounded-lg bg-white text-emerald-800 text-xs font-black shadow-xs hover:bg-emerald-50"
+                  >
+                    ▶ {t.play || 'Start'}
+                  </button>
+                  <button
+                    onClick={handleCancelNextTableTransition}
+                    className="px-2 py-1 rounded-lg bg-black/20 text-white text-xs font-bold hover:bg-black/40"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-xl bg-indigo-500/30 border border-indigo-400/30 text-indigo-200 text-xs font-black tracking-wide uppercase">
-                  {isPlaying ? '🎵 Rhythm Recitation Active' : '⏸️ Recitation Ready'}
+                <span className={`px-2.5 py-0.5 rounded-lg text-[11px] font-black tracking-wide uppercase border flex items-center gap-1 ${
+                  isPlaying
+                    ? 'bg-amber-400/20 text-amber-300 border-amber-400/30 animate-pulse'
+                    : 'bg-indigo-500/25 text-indigo-200 border-indigo-400/30'
+                }`}>
+                  {isPlaying ? '🎵 RECITATION PLAYING' : '⏸️ RECITATION READY'}
                 </span>
+                {autoPlayNextTable && (
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-400/30">
+                    <FastForward className="w-3 h-3" /> Auto-Next ON
+                  </span>
+                )}
               </div>
-              <span className="text-xs font-bold text-indigo-300 font-math">
+              <span className="text-xs font-bold text-indigo-300 font-math bg-white/10 px-2 py-0.5 rounded-md">
                 Step {activeStep} / 10
               </span>
             </div>
 
-            {/* 3-Beat Blinking Equation Blocks */}
-            <div className="grid grid-cols-5 items-center gap-2 sm:gap-4 select-none my-2">
+            {/* 3-Beat Blinking Equation Blocks (Compact, High Contrast, Crisp) */}
+            <div className="grid grid-cols-5 items-center gap-1.5 sm:gap-3 select-none">
               
-              {/* Beat 1: Table Number (e.g. 2) */}
+              {/* Beat 1: Table Number */}
               <div 
                 id="rhythm-beat-table"
-                className={`flex flex-col items-center justify-center p-3 sm:p-5 rounded-2xl sm:rounded-3xl border-2 transition-all duration-200 text-center ${
+                className={`flex flex-col items-center justify-center p-2 sm:p-3 rounded-xl sm:rounded-2xl border-2 transition-all duration-200 text-center ${
                   activeBeat === 1
-                    ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-2xl scale-110 ring-4 ring-amber-300/50 animate-pulse font-black'
+                    ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-xl scale-105 ring-4 ring-amber-300/50 font-black'
                     : 'bg-white/10 text-white border-white/20 font-bold'
                 }`}
               >
-                <span className="text-[10px] sm:text-xs uppercase tracking-wider font-extrabold opacity-80 mb-0.5">
+                <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-extrabold opacity-80">
                   1. Table
                 </span>
-                <span className="text-3xl sm:text-5xl md:text-6xl font-math font-black">
+                <span className="text-2xl sm:text-4xl md:text-5xl font-math font-black leading-none my-0.5">
                   {currentTable}
                 </span>
               </div>
 
               {/* Multiply Symbol */}
-              <div className="flex items-center justify-center text-2xl sm:text-4xl md:text-5xl font-black text-indigo-300">
+              <div className="flex items-center justify-center text-xl sm:text-3xl md:text-4xl font-black text-indigo-300">
                 ×
               </div>
 
-              {/* Beat 2: Multiplier (e.g. 1) */}
+              {/* Beat 2: Multiplier */}
               <div 
                 id="rhythm-beat-multiplier"
-                className={`flex flex-col items-center justify-center p-3 sm:p-5 rounded-2xl sm:rounded-3xl border-2 transition-all duration-200 text-center ${
+                className={`flex flex-col items-center justify-center p-2 sm:p-3 rounded-xl sm:rounded-2xl border-2 transition-all duration-200 text-center ${
                   activeBeat === 2
-                    ? 'bg-purple-500 text-white border-purple-400 shadow-2xl scale-110 ring-4 ring-purple-300/50 animate-pulse font-black'
+                    ? 'bg-purple-500 text-white border-purple-400 shadow-xl scale-105 ring-4 ring-purple-300/50 font-black'
                     : 'bg-white/10 text-white border-white/20 font-bold'
                 }`}
               >
-                <span className="text-[10px] sm:text-xs uppercase tracking-wider font-extrabold opacity-80 mb-0.5">
+                <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-extrabold opacity-80">
                   2. Times
                 </span>
-                <span className="text-3xl sm:text-5xl md:text-6xl font-math font-black">
+                <span className="text-2xl sm:text-4xl md:text-5xl font-math font-black leading-none my-0.5">
                   {activeStep}
                 </span>
               </div>
 
               {/* Equals Symbol */}
-              <div className="flex items-center justify-center text-2xl sm:text-4xl md:text-5xl font-black text-indigo-300">
+              <div className="flex items-center justify-center text-xl sm:text-3xl md:text-4xl font-black text-indigo-300">
                 =
               </div>
 
-              {/* Beat 3: Product / Answer (e.g. 2) */}
+              {/* Beat 3: Product / Answer */}
               <div 
                 id="rhythm-beat-product"
-                className={`flex flex-col items-center justify-center p-3 sm:p-5 rounded-2xl sm:rounded-3xl border-2 transition-all duration-200 text-center ${
+                className={`flex flex-col items-center justify-center p-2 sm:p-3 rounded-xl sm:rounded-2xl border-2 transition-all duration-200 text-center ${
                   activeBeat === 3
-                    ? 'bg-emerald-400 text-slate-950 border-emerald-300 shadow-2xl scale-110 ring-4 ring-emerald-300/50 animate-pulse font-black'
+                    ? 'bg-emerald-400 text-slate-950 border-emerald-300 shadow-xl scale-105 ring-4 ring-emerald-300/50 font-black'
                     : 'bg-white/10 text-amber-300 border-white/20 font-bold'
                 }`}
               >
-                <span className="text-[10px] sm:text-xs uppercase tracking-wider font-extrabold opacity-80 mb-0.5">
+                <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-extrabold opacity-80">
                   3. Answer
                 </span>
-                <span className="text-3xl sm:text-5xl md:text-6xl font-math font-black">
+                <span className="text-2xl sm:text-4xl md:text-5xl font-math font-black leading-none my-0.5">
                   {activeProduct}
                 </span>
               </div>
 
             </div>
 
-            {/* Rhythm Status Instruction */}
-            <div className="text-center pt-2">
-              <p className="text-xs sm:text-sm text-indigo-200 font-medium">
+            {/* Audio Mode Indicator subtitle */}
+            <div className="text-center pt-0.5">
+              <p className="text-[11px] sm:text-xs text-indigo-200 font-medium truncate">
                 {rhythmAudioMode === 'silent' 
-                  ? '🔇 Teacher / Class Recitation Mode: Sound is off so teacher & students can recite aloud in sync with blinking numbers!'
+                  ? '🔇 Teacher / Class Recitation Mode: Muted so classroom recites together.'
                   : rhythmAudioMode === 'metronome'
-                  ? '🔔 Metronome Mode: Steady rhythmic beats guiding classroom recitation tempo.'
-                  : '🎙️ Computer Audio Mode: Speaking each number beat-by-beat.'
+                  ? '🔔 Metronome Mode: Steady rhythmic tempo beats.'
+                  : '🎙️ Computer Voice: Speaking each number beat-by-beat.'
                 }
               </p>
             </div>
           </div>
 
-          {/* 10 Lines Stack (2x1=2 to 2x10=20) */}
-          <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          {/* SECTION 2: 10 Lines Stack (Table of N: 1 to 10) - Compact Single-Screen Height */}
+          <div className="bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-slate-200 shadow-sm space-y-1.5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <div className="flex items-center gap-2">
-                <span className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-600 font-black flex items-center justify-center font-math">
+                <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 font-black flex items-center justify-center text-sm font-math">
                   {currentTable}
                 </span>
-                <h3 className="text-lg sm:text-xl font-black text-slate-800">
+                <h3 className="text-sm sm:text-base font-black text-slate-800">
                   {t.tableOf} {currentTable} (1 to 10)
                 </h3>
               </div>
@@ -443,7 +621,7 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                 <span className="text-xs font-bold text-slate-400 font-math">
                   {activeStep} / 10
                 </span>
-                <div className="w-24 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                <div className="w-20 sm:w-28 h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-300 rounded-full"
                     style={{ width: `${(activeStep / 10) * 100}%` }}
@@ -452,8 +630,8 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
               </div>
             </div>
 
-            {/* 10 Lines List */}
-            <div className="space-y-2 select-none">
+            {/* 10 Lines List (Compact rows so all 10 lines 100% fit on screen) */}
+            <div className="space-y-1 select-none">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((step) => {
                 const isActive = activeStep === step;
                 const isPast = activeStep > step;
@@ -471,19 +649,19 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                         handleBeatSound(1, step);
                       }
                     }}
-                    className={`group flex items-center justify-between px-4 sm:px-6 py-3.5 rounded-2xl cursor-pointer transition-all duration-200 border ${
+                    className={`group flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl cursor-pointer transition-all duration-150 border ${
                       isActive
-                        ? 'bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 text-white border-indigo-800 shadow-lg scale-102 font-black'
+                        ? 'bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 text-white border-indigo-800 shadow-md font-black scale-101'
                         : isPast
-                        ? 'bg-indigo-50/50 text-slate-800 border-indigo-100/80 font-bold opacity-80'
-                        : 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-slate-100 font-medium'
+                        ? 'bg-indigo-50/40 text-slate-800 border-indigo-100/70 font-bold opacity-85'
+                        : 'bg-slate-50 text-slate-600 border-slate-100 hover:bg-slate-100 font-medium'
                     }`}
                   >
-                    <div className="flex items-center gap-3 sm:gap-6 text-base sm:text-2xl font-math">
+                    <div className="flex items-center gap-2.5 sm:gap-4 text-sm sm:text-lg font-math">
                       
                       {/* Factor 1 (Table) */}
-                      <span className={`w-8 sm:w-10 text-center rounded-lg py-0.5 transition-all ${
-                        isActive && activeBeat === 1 ? 'bg-amber-400 text-slate-950 scale-110 shadow font-black' : ''
+                      <span className={`w-6 sm:w-8 text-center rounded py-0.5 transition-all ${
+                        isActive && activeBeat === 1 ? 'bg-amber-400 text-slate-950 font-black scale-110 shadow-xs' : ''
                       }`}>
                         {currentTable}
                       </span>
@@ -491,8 +669,8 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                       <span className={isActive ? 'text-indigo-200' : 'text-slate-400'}>×</span>
                       
                       {/* Factor 2 (Multiplier) */}
-                      <span className={`w-8 sm:w-10 text-center rounded-lg py-0.5 transition-all ${
-                        isActive && activeBeat === 2 ? 'bg-purple-400 text-white scale-110 shadow font-black' : ''
+                      <span className={`w-6 sm:w-8 text-center rounded py-0.5 transition-all ${
+                        isActive && activeBeat === 2 ? 'bg-purple-400 text-white font-black scale-110 shadow-xs' : ''
                       }`}>
                         {step}
                       </span>
@@ -500,9 +678,9 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                       <span className={isActive ? 'text-indigo-200' : 'text-slate-400'}>=</span>
                       
                       {/* Product */}
-                      <span className={`text-lg sm:text-2xl font-black rounded-lg px-2 py-0.5 transition-all ${
+                      <span className={`text-base sm:text-lg font-black rounded px-1.5 py-0.5 transition-all ${
                         isActive && activeBeat === 3 
-                          ? 'bg-emerald-400 text-slate-950 scale-110 shadow' 
+                          ? 'bg-emerald-400 text-slate-950 font-black scale-110 shadow-xs' 
                           : isActive 
                           ? 'text-amber-300' 
                           : 'text-slate-900'
@@ -511,15 +689,15 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       {isActive && (
-                        <span className="px-3 py-1 rounded-full text-xs font-black bg-white/20 text-white animate-pulse flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white animate-pulse flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
                           Beat {activeBeat || 1}
                         </span>
                       )}
                       {isPast && (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                       )}
                     </div>
                   </div>
@@ -530,57 +708,57 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
 
         </div>
 
-        {/* Right Column: Playback Controls, Recitation Sound Mode & Visual Concept */}
-        <div className="lg:col-span-5 space-y-6">
+        {/* Right Column: SECTION 3 - Rhythm & Recitation Controls (Circled in user photo) */}
+        <div className="lg:col-span-5 space-y-3.5">
           
           {/* Controls Card */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-5">
-            <div className="flex items-center justify-between">
-              <h4 className="text-base font-black text-slate-800 flex items-center gap-2">
-                <Sliders className="w-5 h-5 text-indigo-600" />
+          <div className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 border border-slate-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-indigo-600" />
                 <span>Rhythm & Recitation Controls</span>
               </h4>
               <button
                 onClick={handleRestart}
-                className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all text-xs font-bold flex items-center gap-1"
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all text-xs font-bold flex items-center gap-1"
                 title={t.restart}
               >
-                <RotateCcw className="w-4 h-4" />
+                <RotateCcw className="w-3.5 h-3.5" />
                 <span>{t.restart}</span>
               </button>
             </div>
 
-            {/* Play/Pause Main Button and Navigation Bar */}
-            <div className="grid grid-cols-4 gap-2">
+            {/* Play/Pause Main Button and Step Skip Navigation */}
+            <div className="grid grid-cols-4 gap-1.5">
               <button
                 id="btn-table-prev"
                 onClick={handlePrevStep}
-                disabled={activeStep <= 1}
-                className="py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-bold flex flex-col items-center justify-center gap-1 transition-all"
+                disabled={activeStep <= 1 && currentTable <= 2}
+                className="py-3 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-bold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95"
               >
-                <SkipBack className="w-5 h-5" />
-                <span className="text-[11px]">{t.previous}</span>
+                <SkipBack className="w-4 h-4" />
+                <span className="text-[10px]">{t.previous}</span>
               </button>
 
               {/* Play / Pause Toggle Button */}
               <button
                 id="btn-table-play-pause"
                 onClick={togglePlayPause}
-                className={`py-3.5 col-span-2 rounded-2xl font-black text-white flex items-center justify-center gap-2.5 shadow-lg transition-all active:scale-95 ${
+                className={`py-3 col-span-2 rounded-xl font-black text-white flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 ${
                   isPlaying
-                    ? 'bg-amber-500 hover:bg-amber-600 ring-4 ring-amber-100 shadow-amber-200'
+                    ? 'bg-amber-500 hover:bg-amber-600 ring-2 ring-amber-200 shadow-amber-200'
                     : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
                 }`}
               >
                 {isPlaying ? (
                   <>
-                    <Pause className="w-6 h-6 fill-current" />
-                    <span className="text-base">{t.pause || 'Pause'}</span>
+                    <Pause className="w-5 h-5 fill-current" />
+                    <span className="text-sm sm:text-base">{t.pause || 'Pause'}</span>
                   </>
                 ) : (
                   <>
-                    <Play className="w-6 h-6 fill-current" />
-                    <span className="text-base">{t.autoRhythm || 'Start Rhythm'}</span>
+                    <Play className="w-5 h-5 fill-current" />
+                    <span className="text-sm sm:text-base">{t.autoRhythm || 'Start Rhythm'}</span>
                   </>
                 )}
               </button>
@@ -588,29 +766,66 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
               <button
                 id="btn-table-next"
                 onClick={handleNextStep}
-                disabled={activeStep >= 10}
-                className="py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-bold flex flex-col items-center justify-center gap-1 transition-all"
+                disabled={activeStep >= 10 && currentTable >= 20}
+                className="py-3 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-bold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95"
               >
-                <SkipForward className="w-5 h-5" />
-                <span className="text-[11px]">{t.next}</span>
+                <SkipForward className="w-4 h-4" />
+                <span className="text-[10px]">{t.next}</span>
               </button>
             </div>
 
-            {/* Sound & Recitation Mode Selector (Teacher Silent vs Voice vs Metronome) */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
+            {/* Auto-Play Next Table Toggle Box (Requested Feature!) */}
+            <div className={`p-2.5 rounded-xl border transition-all ${
+              autoPlayNextTable 
+                ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-300 ring-1 ring-emerald-200' 
+                : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                    autoPlayNextTable ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    <FastForward className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-slate-800 block">
+                      {t.autoPlayNextTable || 'Auto-Play Next Table (2 ➔ 20)'}
+                    </span>
+                    <span className="text-[10px] text-slate-500 block leading-tight">
+                      {autoPlayNextTable ? 'Moves to next table automatically when finished ✓' : 'Stops at 10 (Manual change)'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  id="toggle-autoplay-next-table-btn"
+                  onClick={handleToggleAutoPlayNext}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                    autoPlayNextTable
+                      ? 'bg-emerald-600 text-white shadow-xs hover:bg-emerald-700'
+                      : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                  }`}
+                >
+                  {autoPlayNextTable ? 'ENABLED' : 'OFF'}
+                </button>
+              </div>
+            </div>
+
+            {/* Recitation Audio Mode (Silent Teacher vs Computer Voice vs Metronome) */}
+            <div className="space-y-1.5 pt-1 border-t border-slate-100">
               <label className="text-xs font-extrabold text-slate-700 block">
                 Recitation Audio Mode:
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-1.5">
                 <button
                   id="mode-silent-recitation"
                   onClick={() => {
                     sounds.playClick();
                     setRhythmAudioMode('silent');
                   }}
-                  className={`p-2.5 rounded-2xl text-xs font-extrabold flex flex-col items-center justify-center gap-1 border transition-all ${
+                  className={`p-2 rounded-xl text-[11px] font-extrabold flex flex-col items-center justify-center gap-1 border transition-all ${
                     rhythmAudioMode === 'silent'
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-200 shadow-sm'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-200 shadow-xs'
                       : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
@@ -625,9 +840,9 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                     setRhythmAudioMode('speech');
                     updateSettings({ speechEnabled: true });
                   }}
-                  className={`p-2.5 rounded-2xl text-xs font-extrabold flex flex-col items-center justify-center gap-1 border transition-all ${
+                  className={`p-2 rounded-xl text-[11px] font-extrabold flex flex-col items-center justify-center gap-1 border transition-all ${
                     rhythmAudioMode === 'speech'
-                      ? 'bg-indigo-50 text-indigo-800 border-indigo-300 ring-2 ring-indigo-200 shadow-sm'
+                      ? 'bg-indigo-50 text-indigo-800 border-indigo-300 ring-2 ring-indigo-200 shadow-xs'
                       : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
@@ -641,9 +856,9 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                     sounds.playClick();
                     setRhythmAudioMode('metronome');
                   }}
-                  className={`p-2.5 rounded-2xl text-xs font-extrabold flex flex-col items-center justify-center gap-1 border transition-all ${
+                  className={`p-2 rounded-xl text-[11px] font-extrabold flex flex-col items-center justify-center gap-1 border transition-all ${
                     rhythmAudioMode === 'metronome'
-                      ? 'bg-purple-50 text-purple-800 border-purple-300 ring-2 ring-purple-200 shadow-sm'
+                      ? 'bg-purple-50 text-purple-800 border-purple-300 ring-2 ring-purple-200 shadow-xs'
                       : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
@@ -654,12 +869,12 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
             </div>
 
             {/* Rhythm Speed Control */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
+            <div className="space-y-1 pt-1 border-t border-slate-100">
               <div className="flex items-center justify-between text-xs font-bold text-slate-600">
                 <span>{t.speed || 'Rhythm Speed'}</span>
                 <span className="text-indigo-600 font-math">{(currentBeatDelay / 1000).toFixed(2)}s per beat</span>
               </div>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-4 gap-1">
                 {(['slow', 'normal', 'fast', 'very-fast'] as RhythmSpeed[]).map((spd) => (
                   <button
                     key={spd}
@@ -668,9 +883,9 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                       sounds.playClick();
                       updateSettings({ rhythmSpeed: spd });
                     }}
-                    className={`py-2 px-1 rounded-xl text-xs font-bold text-center transition-all ${
+                    className={`py-1.5 px-1 rounded-lg text-[11px] font-bold text-center transition-all ${
                       settings.rhythmSpeed === spd
-                        ? 'bg-indigo-600 text-white shadow-sm'
+                        ? 'bg-indigo-600 text-white shadow-xs'
                         : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
@@ -681,28 +896,28 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
             </div>
 
             {/* Voice Interactive Mode Toggle */}
-            <div className="pt-2 border-t border-slate-100 space-y-2">
+            <div className="pt-1 border-t border-slate-100 space-y-1.5">
               <button
                 id="toggle-voice-recite-btn"
                 onClick={toggleVoiceMode}
-                className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all ${
+                className={`w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all ${
                   isVoiceListening
-                    ? 'bg-rose-500 text-white border-rose-600 animate-pulse shadow-md'
+                    ? 'bg-rose-500 text-white border-rose-600 animate-pulse shadow-xs'
                     : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
                 }`}
               >
-                {isVoiceListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                <span>{isVoiceListening ? 'Voice Answer Mode: Active (Listening...)' : '🎙️ Practice Speaking via Microphone'}</span>
+                {isVoiceListening ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+                <span>{isVoiceListening ? 'Voice Answer Mode: (Listening...)' : '🎙️ Practice Speaking via Microphone'}</span>
               </button>
 
               {isVoiceListening && (
-                <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold space-y-1">
+                <div className="p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold space-y-0.5">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                    <span>Say the answer for: {currentTable} × {activeStep} = ?</span>
+                    <div className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                    <span>Say: {currentTable} × {activeStep} = ?</span>
                   </div>
                   {voiceFeedback && (
-                    <div className="text-indigo-600 font-bold mt-1">
+                    <div className="text-indigo-600 font-bold">
                       {voiceFeedback}
                     </div>
                   )}
@@ -710,41 +925,41 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
               )}
 
               {speechError && (
-                <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium">
+                <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium">
                   {speechError}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Visual Concept Multiplication Card */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
+          {/* Visual Concept Multiplication Card (Compact & Balanced) */}
+          <div className="bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-slate-200 shadow-sm space-y-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-indigo-600 font-black text-sm sm:text-base">
+              <div className="flex items-center gap-1.5 text-indigo-600 font-black text-xs sm:text-sm">
                 <Eye className="w-4 h-4" />
-                <span>{t.visualMode || 'Visual Representation'}</span>
+                <span>{t.visualMode || 'Visual Concept Mode'}</span>
               </div>
-              <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-black font-math">
+              <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-xs font-black font-math">
                 {currentTable} × {activeStep} = {activeProduct}
               </span>
             </div>
 
-            {/* Visual Dot Groups */}
-            <div className="space-y-3">
-              <p className="text-xs text-slate-500 font-semibold">
+            {/* Visual Dot Groups (Compact) */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-slate-500 font-semibold">
                 {activeStep} {t.groupsOf || 'groups of'} {currentTable}:
               </p>
 
-              <div className="flex flex-wrap gap-2.5 p-3.5 rounded-2xl bg-slate-50 border border-slate-100 justify-center max-h-48 overflow-y-auto">
+              <div className="flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-100 justify-center max-h-32 overflow-y-auto">
                 {[...Array(activeStep)].map((_, gIndex) => (
                   <div 
                     key={gIndex}
-                    className="p-2 rounded-xl bg-white border border-indigo-100 shadow-sm flex flex-wrap gap-1 items-center justify-center max-w-[120px]"
+                    className="p-1 rounded-lg bg-white border border-indigo-100 shadow-xs flex flex-wrap gap-1 items-center justify-center max-w-[100px]"
                   >
                     {[...Array(currentTable)].map((_, dIndex) => (
                       <span 
                         key={dIndex}
-                        className="w-3.5 h-3.5 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 shadow-xs"
+                        className="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500"
                       />
                     ))}
                   </div>
@@ -752,11 +967,11 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
               </div>
 
               {/* Repeated Addition Expression */}
-              <div className="p-3 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-center space-y-1">
-                <div className="text-xs font-bold text-indigo-500 uppercase tracking-wider">
+              <div className="p-2 rounded-xl bg-indigo-50/70 border border-indigo-100 text-center space-y-0.5">
+                <div className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">
                   {t.repeatedAddition || 'Repeated Addition'}
                 </div>
-                <div className="text-sm sm:text-base font-black text-indigo-900 font-math">
+                <div className="text-xs sm:text-sm font-black text-indigo-900 font-math truncate">
                   {[...Array(activeStep)].map(() => currentTable).join(' + ')} = {activeProduct}
                 </div>
               </div>
@@ -769,17 +984,25 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
 
       {/* Classroom Smart Board Full-Screen Presentation Overlay */}
       {isPresentationMode && (
-        <div className="fixed inset-0 z-50 bg-slate-950 text-white flex flex-col justify-between p-6 sm:p-12 overflow-hidden animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 bg-slate-950 text-white flex flex-col justify-between p-4 sm:p-8 md:p-10 overflow-hidden animate-in fade-in duration-200">
           
           {/* Header Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="px-4 py-2 rounded-2xl bg-indigo-600 text-white text-xl sm:text-2xl font-black font-math shadow-lg">
+              <span className="px-4 py-1.5 rounded-2xl bg-indigo-600 text-white text-xl sm:text-2xl font-black font-math shadow-lg">
                 {t.tableOf} {currentTable}
               </span>
-              <span className="text-slate-400 text-sm font-semibold hidden sm:inline">
-                Smart Board Classroom Presentation Mode
-              </span>
+              <button
+                onClick={handleToggleAutoPlayNext}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all flex items-center gap-1.5 ${
+                  autoPlayNextTable
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
+                    : 'bg-white/10 text-white/60 border-white/20'
+                }`}
+              >
+                <FastForward className="w-3.5 h-3.5" />
+                <span>Auto Next: {autoPlayNextTable ? 'ON' : 'OFF'}</span>
+              </button>
             </div>
 
             {/* Exit Presentation Mode */}
@@ -789,62 +1012,78 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                 setIsPresentationMode(false);
                 setIsPlaying(false);
               }}
-              className="px-6 py-3 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-black text-sm tracking-wide transition-all border border-white/20 flex items-center gap-2"
+              className="px-5 py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-black text-xs sm:text-sm tracking-wide transition-all border border-white/20 flex items-center gap-2"
             >
               ✕ <span>{t.exitPresentation || 'Exit Presentation'}</span>
             </button>
           </div>
 
           {/* Central Mega Display with Beat-by-Beat Glow */}
-          <div className="flex-1 flex flex-col items-center justify-center my-6 text-center space-y-6">
+          <div className="flex-1 flex flex-col items-center justify-center my-4 text-center space-y-5">
             
-            <div className="w-full max-w-4xl p-8 sm:p-14 rounded-3xl bg-gradient-to-b from-indigo-900/90 to-purple-950/95 border-2 border-indigo-400/50 shadow-2xl backdrop-blur-xl space-y-6">
+            {/* Auto Next Table Countdown Notification */}
+            {nextTableTransition && (
+              <div className="p-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center justify-between gap-4 max-w-xl w-full shadow-2xl animate-bounce">
+                <div className="flex items-center gap-2 font-black text-base">
+                  <Sparkles className="w-5 h-5 text-amber-300" />
+                  <span>Table {currentTable} Complete! Starting Table {nextTableTransition.nextTable}...</span>
+                </div>
+                <button
+                  onClick={handleImmediateNextTable}
+                  className="px-3 py-1 rounded-xl bg-white text-emerald-900 font-black text-xs shadow-md"
+                >
+                  Start Now ▶
+                </button>
+              </div>
+            )}
+
+            <div className="w-full max-w-4xl p-6 sm:p-10 rounded-3xl bg-gradient-to-b from-indigo-900/90 to-purple-950/95 border-2 border-indigo-400/50 shadow-2xl backdrop-blur-xl space-y-5">
               
               {/* Massive 3-Beat Highlighting Equation */}
-              <div className="grid grid-cols-5 items-center gap-4 text-center select-none">
+              <div className="grid grid-cols-5 items-center gap-3 sm:gap-4 text-center select-none">
                 
                 {/* Beat 1 Table */}
-                <div className={`p-4 sm:p-8 rounded-3xl border-2 transition-all duration-200 ${
+                <div className={`p-3 sm:p-6 rounded-3xl border-2 transition-all duration-200 ${
                   activeBeat === 1
                     ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-2xl scale-110 ring-8 ring-amber-300/40 animate-pulse font-black'
                     : 'bg-white/10 text-white border-white/20 font-bold'
                 }`}>
-                  <span className="text-xs uppercase tracking-wider block opacity-70 mb-1">1. Table</span>
-                  <span className="text-5xl sm:text-7xl md:text-8xl font-math font-black">{currentTable}</span>
+                  <span className="text-[10px] sm:text-xs uppercase tracking-wider block opacity-70 mb-0.5">1. Table</span>
+                  <span className="text-4xl sm:text-6xl md:text-7xl font-math font-black">{currentTable}</span>
                 </div>
 
-                <div className="text-4xl sm:text-6xl font-black text-indigo-300">×</div>
+                <div className="text-3xl sm:text-5xl font-black text-indigo-300">×</div>
 
                 {/* Beat 2 Multiplier */}
-                <div className={`p-4 sm:p-8 rounded-3xl border-2 transition-all duration-200 ${
+                <div className={`p-3 sm:p-6 rounded-3xl border-2 transition-all duration-200 ${
                   activeBeat === 2
                     ? 'bg-purple-500 text-white border-purple-400 shadow-2xl scale-110 ring-8 ring-purple-300/40 animate-pulse font-black'
                     : 'bg-white/10 text-white border-white/20 font-bold'
                 }`}>
-                  <span className="text-xs uppercase tracking-wider block opacity-70 mb-1">2. Times</span>
-                  <span className="text-5xl sm:text-7xl md:text-8xl font-math font-black">{activeStep}</span>
+                  <span className="text-[10px] sm:text-xs uppercase tracking-wider block opacity-70 mb-0.5">2. Times</span>
+                  <span className="text-4xl sm:text-6xl md:text-7xl font-math font-black">{activeStep}</span>
                 </div>
 
-                <div className="text-4xl sm:text-6xl font-black text-indigo-300">=</div>
+                <div className="text-3xl sm:text-5xl font-black text-indigo-300">=</div>
 
                 {/* Beat 3 Product */}
-                <div className={`p-4 sm:p-8 rounded-3xl border-2 transition-all duration-200 ${
+                <div className={`p-3 sm:p-6 rounded-3xl border-2 transition-all duration-200 ${
                   activeBeat === 3
                     ? 'bg-emerald-400 text-slate-950 border-emerald-300 shadow-2xl scale-110 ring-8 ring-emerald-300/40 animate-pulse font-black'
                     : 'bg-white/10 text-amber-300 border-white/20 font-bold'
                 }`}>
-                  <span className="text-xs uppercase tracking-wider block opacity-70 mb-1">3. Answer</span>
-                  <span className="text-5xl sm:text-7xl md:text-8xl font-math font-black">{activeProduct}</span>
+                  <span className="text-[10px] sm:text-xs uppercase tracking-wider block opacity-70 mb-0.5">3. Answer</span>
+                  <span className="text-4xl sm:text-6xl md:text-7xl font-math font-black">{activeProduct}</span>
                 </div>
 
               </div>
 
               {/* Visual Groups representation */}
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-4">
+              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2 max-h-28 overflow-y-auto">
                 {[...Array(activeStep)].map((_, gi) => (
-                  <div key={gi} className="p-2 rounded-xl bg-white/10 flex gap-1.5 items-center">
+                  <div key={gi} className="p-1.5 rounded-xl bg-white/10 flex gap-1 items-center">
                     {[...Array(currentTable)].map((_, di) => (
-                      <span key={di} className="w-4 h-4 rounded-full bg-amber-400 shadow-sm" />
+                      <span key={di} className="w-3.5 h-3.5 rounded-full bg-amber-400 shadow-xs" />
                     ))}
                   </div>
                 ))}
@@ -853,7 +1092,7 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
             </div>
 
             {/* Sequence 1 to 10 Quick Select Buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((s) => (
                 <button
                   key={s}
@@ -862,9 +1101,9 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                     setActiveStep(s);
                     setActiveBeat(1);
                   }}
-                  className={`w-11 h-11 rounded-xl font-bold font-math transition-all ${
+                  className={`w-9 sm:w-11 h-9 sm:h-11 rounded-xl font-bold font-math transition-all ${
                     activeStep === s
-                      ? 'bg-amber-400 text-slate-900 scale-115 font-black shadow-lg ring-2 ring-amber-200'
+                      ? 'bg-amber-400 text-slate-900 scale-110 font-black shadow-lg ring-2 ring-amber-200'
                       : activeStep > s
                       ? 'bg-indigo-700/80 text-white'
                       : 'bg-white/10 text-white/50 hover:bg-white/20'
@@ -878,36 +1117,36 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
           </div>
 
           {/* Bottom Presentation Controls Bar */}
-          <div className="max-w-4xl mx-auto w-full flex flex-wrap items-center justify-between gap-4 bg-white/10 backdrop-blur-xl p-4 sm:p-6 rounded-3xl border border-white/20">
+          <div className="max-w-4xl mx-auto w-full flex flex-wrap items-center justify-between gap-3 bg-white/10 backdrop-blur-xl p-3 sm:p-5 rounded-3xl border border-white/20">
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={handlePrevStep}
-                disabled={activeStep <= 1}
-                className="px-6 py-4 rounded-2xl bg-white/20 hover:bg-white/30 disabled:opacity-30 text-white font-black text-lg flex items-center gap-2 transition-all"
+                disabled={activeStep <= 1 && currentTable <= 2}
+                className="px-4 sm:px-6 py-3 rounded-2xl bg-white/20 hover:bg-white/30 disabled:opacity-30 text-white font-black text-base sm:text-lg flex items-center gap-2 transition-all"
               >
-                <SkipBack className="w-6 h-6" />
+                <SkipBack className="w-5 h-5" />
                 <span>{t.previous}</span>
               </button>
 
               {/* Play / Pause Toggle in Smart Board mode */}
               <button
                 onClick={togglePlayPause}
-                className={`px-10 py-4 rounded-2xl font-black text-xl flex items-center gap-3 shadow-xl transition-all active:scale-95 ${
+                className={`px-8 sm:px-10 py-3 rounded-2xl font-black text-lg sm:text-xl flex items-center gap-2.5 shadow-xl transition-all active:scale-95 ${
                   isPlaying ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 ring-4 ring-amber-200' : 'bg-indigo-600 text-white hover:bg-indigo-500'
                 }`}
               >
-                {isPlaying ? <Pause className="w-7 h-7 fill-current" /> : <Play className="w-7 h-7 fill-current" />}
+                {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
                 <span>{isPlaying ? (t.pause || 'Pause') : (t.play || 'Start Rhythm')}</span>
               </button>
 
               <button
                 onClick={handleNextStep}
-                disabled={activeStep >= 10}
-                className="px-6 py-4 rounded-2xl bg-white/20 hover:bg-white/30 disabled:opacity-30 text-white font-black text-lg flex items-center gap-2 transition-all"
+                disabled={activeStep >= 10 && currentTable >= 20}
+                className="px-4 sm:px-6 py-3 rounded-2xl bg-white/20 hover:bg-white/30 disabled:opacity-30 text-white font-black text-base sm:text-lg flex items-center gap-2 transition-all"
               >
                 <span>{t.next}</span>
-                <SkipForward className="w-6 h-6" />
+                <SkipForward className="w-5 h-5" />
               </button>
             </div>
 
@@ -919,21 +1158,21 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
                   const nextMode: RhythmAudioMode = rhythmAudioMode === 'silent' ? 'speech' : rhythmAudioMode === 'speech' ? 'metronome' : 'silent';
                   setRhythmAudioMode(nextMode);
                 }}
-                className="px-5 py-4 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-sm flex items-center gap-2"
+                className="px-4 py-3 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm flex items-center gap-2"
               >
                 {rhythmAudioMode === 'silent' ? (
                   <>
-                    <VolumeX className="w-5 h-5 text-emerald-400" />
-                    <span>Recitation: Muted (Teacher/Class)</span>
+                    <VolumeX className="w-4 h-4 text-emerald-400" />
+                    <span>Recitation: Muted</span>
                   </>
                 ) : rhythmAudioMode === 'speech' ? (
                   <>
-                    <Volume2 className="w-5 h-5 text-indigo-300" />
-                    <span>Recitation: Computer Voice</span>
+                    <Volume2 className="w-4 h-4 text-indigo-300" />
+                    <span>Recitation: Voice</span>
                   </>
                 ) : (
                   <>
-                    <Bell className="w-5 h-5 text-purple-300" />
+                    <Bell className="w-4 h-4 text-purple-300" />
                     <span>Recitation: Metronome</span>
                   </>
                 )}
@@ -941,10 +1180,10 @@ export const TablesLearning: React.FC<TablesLearningProps> = ({
 
               <button
                 onClick={handleRestart}
-                className="p-4 rounded-2xl bg-white/15 hover:bg-white/25 text-white"
+                className="p-3 rounded-2xl bg-white/15 hover:bg-white/25 text-white"
                 title={t.restart}
               >
-                <RotateCcw className="w-6 h-6" />
+                <RotateCcw className="w-5 h-5" />
               </button>
             </div>
 

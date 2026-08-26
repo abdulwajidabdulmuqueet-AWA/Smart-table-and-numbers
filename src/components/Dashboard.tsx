@@ -10,10 +10,14 @@ import {
   Sparkles, 
   Flame, 
   Award, 
-  ArrowRight,
-  Tv,
-  BrainCircuit,
-  Star
+  ArrowRight, 
+  Tv, 
+  BrainCircuit, 
+  Star,
+  Download,
+  CheckCircle2,
+  Zap,
+  Smartphone
 } from 'lucide-react';
 import { AppView, AppSettings, UserProgress } from '../types';
 import { translations } from '../utils/translations';
@@ -24,13 +28,19 @@ interface DashboardProps {
   setSelectedTable: (table: number) => void;
   settings: AppSettings;
   progress: UserProgress;
+  isInstalled?: boolean;
+  onOpenInstallModal?: () => void;
+  onInstallClick?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
   setCurrentView,
   setSelectedTable,
   settings,
-  progress
+  progress,
+  isInstalled = false,
+  onOpenInstallModal,
+  onInstallClick
 }) => {
   const t = translations[settings.language];
   const isUrdu = settings.language === 'ur';
@@ -167,6 +177,41 @@ export const Dashboard: React.FC<DashboardProps> = ({
               >
                 <Trophy className="w-4 h-4 text-amber-300" />
                 <span>{t.viewProgress}</span>
+              </button>
+
+              {/* Install App Quick Action in Hero */}
+              <button
+                id="quick-install-app-hero-btn"
+                onClick={() => {
+                  sounds.playClick();
+                  if (onOpenInstallModal) onOpenInstallModal();
+                  else if (onInstallClick) onInstallClick();
+                }}
+                className={`px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all flex items-center gap-2 border ${
+                  isInstalled
+                    ? 'bg-emerald-500/30 text-white border-emerald-300/40 hover:bg-emerald-500/50'
+                    : 'bg-gradient-to-r from-pink-500 to-rose-500 text-white border-pink-300/40 hover:from-pink-600 hover:to-rose-600 hover:scale-105 active:scale-95'
+                }`}
+              >
+                {isInstalled ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                    <span>{isUrdu ? 'انسٹال شدہ ✓' : 'Installed ✓'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 animate-bounce" />
+                    <span>
+                      {isUrdu
+                        ? '📱 ایپ انسٹال کریں'
+                        : settings.language === 'hi'
+                        ? '📱 ऐप इंस्टॉल करें'
+                        : settings.language === 'mr'
+                        ? '📱 ॲप इन्स्टॉल करा'
+                        : '📱 Install Offline App'}
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -328,6 +373,60 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* PWA Offline & Install Card */}
+      <div className="bg-gradient-to-r from-purple-800 via-indigo-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 border border-purple-500/30">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/30">
+            <Download className="w-7 h-7 text-white" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-black">{t.installModalTitle}</h3>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-400/30">
+                100% Offline PWA
+              </span>
+            </div>
+            <p className="text-sm text-purple-200 max-w-xl font-medium">
+              {t.installModalSubtitle}
+            </p>
+          </div>
+        </div>
+
+        <button
+          id="dashboard-install-pwa-banner-btn"
+          onClick={() => {
+            sounds.playClick();
+            if (onOpenInstallModal) onOpenInstallModal();
+            else if (onInstallClick) onInstallClick();
+          }}
+          className={`px-6 py-3.5 rounded-2xl font-black text-sm shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2.5 whitespace-nowrap ${
+            isInstalled
+              ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+              : 'bg-gradient-to-r from-pink-500 via-rose-500 to-amber-400 text-white hover:opacity-95'
+          }`}
+        >
+          {isInstalled ? (
+            <>
+              <CheckCircle2 className="w-5 h-5 text-white" />
+              <span>{isUrdu ? 'انسٹال شدہ (تفصیلات دیکھیں)' : 'Installed ✓ (View Info)'}</span>
+            </>
+          ) : (
+            <>
+              <Download className="w-5 h-5 animate-pulse" />
+              <span>
+                {isUrdu
+                  ? 'ابھی ایپ انسٹال کریں'
+                  : settings.language === 'hi'
+                  ? 'अभी ऐप इंस्टॉल करें'
+                  : settings.language === 'mr'
+                  ? 'आता ॲप इन्स्टॉल करा'
+                  : 'Install App Now'}
+              </span>
+            </>
+          )}
+        </button>
       </div>
 
       {/* Classroom Smart Board Highlight Notice */}

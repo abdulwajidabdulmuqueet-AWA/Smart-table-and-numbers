@@ -33,6 +33,10 @@ export interface AppTranslation {
   autoRhythm: string;
   autoRhythmOn: string;
   autoRhythmOff: string;
+  autoPlayNextTable: string;
+  autoPlayNextDesc: string;
+  tableCompletedNextIn: string;
+  singleScreenMode: string;
   voiceMode: string;
   voiceModeOn: string;
   voiceModeOff: string;
@@ -169,6 +173,18 @@ export interface AppTranslation {
   pwaInstall: string;
   pwaInstalled: string;
   pwaOfflineReady: string;
+  installModalTitle: string;
+  installModalSubtitle: string;
+  installNowBtn: string;
+  installHowToTitle: string;
+  installAndroidStep: string;
+  installIosStep: string;
+  installDesktopStep: string;
+  installFeatureOffline: string;
+  installFeatureFast: string;
+  installFeatureSafe: string;
+  alreadyInstalled: string;
+  close: string;
 }
 
 export const translations: Record<Language, AppTranslation> = {
@@ -202,6 +218,10 @@ export const translations: Record<Language, AppTranslation> = {
     autoRhythm: 'Auto Rhythm Mode',
     autoRhythmOn: 'Auto Rhythm: ON',
     autoRhythmOff: 'Auto Rhythm: OFF',
+    autoPlayNextTable: 'Auto-Play Next Table',
+    autoPlayNextDesc: 'Automatically advances to the next table (2 → 20) upon completion',
+    tableCompletedNextIn: 'Table {table} Complete! Next Table in {sec}s...',
+    singleScreenMode: 'Fit to Single Screen',
     voiceMode: 'Voice Recitation Mode',
     voiceModeOn: 'Voice Mode: ON (Listening)',
     voiceModeOff: 'Voice Mode: OFF',
@@ -330,11 +350,23 @@ export const translations: Record<Language, AppTranslation> = {
     reducedMotion: 'Reduced Motion (Less Animation)',
     pwaInstall: '📱 Install App as PWA (Offline Use)',
     pwaInstalled: 'App is installed and offline ready',
-    pwaOfflineReady: '100% Offline Ready. All tables, calculations and audio work without internet.'
+    pwaOfflineReady: '100% Offline Ready. All tables, calculations and audio work without internet.',
+    installModalTitle: 'Install Smart Maths App',
+    installModalSubtitle: 'Install on your Phone, Tablet, Smart Board, or Computer for 100% offline access and fast full-screen teaching.',
+    installNowBtn: 'Install App Now (1-Click)',
+    installHowToTitle: 'How to Install on Your Device:',
+    installAndroidStep: 'Android / Chrome: Tap "Install App Now" or tap menu (⋮) -> select "Install App" or "Add to Home screen".',
+    installIosStep: 'iPhone / iPad (Safari): Tap the Share button (⎋ / 📤) at the bottom -> scroll down -> tap "Add to Home Screen" (+).',
+    installDesktopStep: 'Computer / Smart Board: Click the install icon (⊕ / ⬇) on the right side of the browser address bar.',
+    installFeatureOffline: '⚡ 100% Offline: Practice tables, numbers & games anywhere with no internet needed.',
+    installFeatureFast: '🚀 Instant Launch: Opens like a native app with zero delay and saved high-scores.',
+    installFeatureSafe: '🎯 Classroom Ready: Full-screen distraction-free mode for smart boards & tablets.',
+    alreadyInstalled: 'Smart Maths is installed on this device!',
+    close: 'Close'
   },
   
   hi: {
-    appTitle: 'गणित शिक्षण PWA',
+    appTitle: 'Smart Maths (Table and Numbers)',
     appSubtitle: 'कक्षाओं और स्मार्ट बोर्ड के लिए इंटरैक्टिव गणित',
     tagline: 'दृश्य, रोचक और आनंददायी गणितीय महारत',
     
@@ -363,6 +395,10 @@ export const translations: Record<Language, AppTranslation> = {
     autoRhythm: 'ऑटो रिदम मोड',
     autoRhythmOn: 'ऑटो रिदम: चालू',
     autoRhythmOff: 'ऑटो रिदम: बंद',
+    autoPlayNextTable: 'अगला पहाड़ा ऑटो-प्ले करें',
+    autoPlayNextDesc: 'पहाड़ा समाप्त होने पर अपने आप अगले पहाड़े (२ → २०) पर जाएं',
+    tableCompletedNextIn: 'पहाड़ा {table} पूरा हुआ! {sec} सेकंड में अगला पहाड़ा...',
+    singleScreenMode: 'सिंगल स्क्रीन व्यू',
     voiceMode: 'स्वर उच्चारण मोड (Voice)',
     voiceModeOn: 'स्वर मोड: चालू (सुन रहा है)',
     voiceModeOff: 'स्वर मोड: बंद',
@@ -491,11 +527,23 @@ export const translations: Record<Language, AppTranslation> = {
     reducedMotion: 'कम एनिमेशन (Reduced Motion)',
     pwaInstall: '📱 ऐप इंस्टॉल करें (ऑफलाइन उपयोग हेतु)',
     pwaInstalled: 'ऐप इंस्टॉल हो चुका है और ऑफलाइन तैयार है',
-    pwaOfflineReady: '१००% ऑफलाइन तैयार। सभी पहाड़े और खेल बिना इंटरनेट के काम करते हैं।'
+    pwaOfflineReady: '१००% ऑफलाइन तैयार। सभी पहाड़े और खेल बिना इंटरनेट के काम करते हैं।',
+    installModalTitle: 'Smart Maths ऐप इंस्टॉल करें',
+    installModalSubtitle: '१००% ऑफलाइन उपयोग और फुल-स्क्रीन शिक्षण के लिए अपने फोन, टैबलेट, स्मार्ट बोर्ड या कंप्यूटर पर इंस्टॉल करें।',
+    installNowBtn: 'अभी ऐप इंस्टॉल करें (1-Click)',
+    installHowToTitle: 'अपने डिवाइस पर कैसे इंस्टॉल करें:',
+    installAndroidStep: 'Android / Chrome: "अभी ऐप इंस्टॉल करें" पर टैप करें या मेनू (⋮) -> "App इंस्टॉल करें" / "Add to Home screen" चुनें।',
+    installIosStep: 'iPhone / iPad (Safari): नीचे शेयर बटन (⎋ / 📤) दबाएं -> नीचे स्क्रॉल करें -> "Add to Home Screen" (+) चुनें।',
+    installDesktopStep: 'कंप्यूटर / स्मार्ट बोर्ड: ब्राउज़र के एड्रेस बार में दाईं ओर दिए गए इंस्टॉल आइकन (⊕ / ⬇) पर क्लिक करें।',
+    installFeatureOffline: '⚡ १००% ऑफलाइन: बिना इंटरनेट के कभी भी पहाड़े और खेल सीखें।',
+    installFeatureFast: '🚀 तुरंत ओपन: सामान्य ऐप की तरह बिजली की गति से लोड होता है।',
+    installFeatureSafe: '🎯 स्मार्ट बोर्ड तैयार: कक्षाओं के लिए बिना किसी रुकावट के फुल-स्क्रीन अनुभव।',
+    alreadyInstalled: 'Smart Maths ऐप इस डिवाइस पर पहले से इंस्टॉल है!',
+    close: 'बंद करें'
   },
   
   mr: {
-    appTitle: 'गणित अध्ययन PWA',
+    appTitle: 'Smart Maths (Table and Numbers)',
     appSubtitle: 'वर्गखोल्या आणि स्मार्ट बोर्डसाठी परस्परसंवादी गणित',
     tagline: 'दृश्यमान, रंजक आणि आनंददायी गणितीय शिक्षण',
     
@@ -524,6 +572,10 @@ export const translations: Record<Language, AppTranslation> = {
     autoRhythm: 'ऑटो रिदम मोड',
     autoRhythmOn: 'ऑटो रिदम: चालू',
     autoRhythmOff: 'ऑटो रिदम: बंद',
+    autoPlayNextTable: 'पुढील पाढा ऑटो-प्ले करा',
+    autoPlayNextDesc: 'पाढा संपल्यावर आपोआप पुढील पाढ्यावर (२ → २०) जा',
+    tableCompletedNextIn: 'पाढा {table} पूर्ण! {sec} सेकंदात पुढील पाढा...',
+    singleScreenMode: 'सिंगल स्क्रीन मोड',
     voiceMode: 'आवाज पठण मोड (Voice)',
     voiceModeOn: 'आवाज मोड: चालू (ऐकत आहे)',
     voiceModeOff: 'आवाज मोड: बंद',
@@ -652,11 +704,23 @@ export const translations: Record<Language, AppTranslation> = {
     reducedMotion: 'कमी ॲनिमेशन (Reduced Motion)',
     pwaInstall: '📱 ॲप इन्स्टॉल करा (ऑफलाइन वापरासाठी)',
     pwaInstalled: 'ॲप इन्स्टॉल झाले आहे आणि ऑफलाइन तयार आहे',
-    pwaOfflineReady: '१००% ऑफलाइन तयार. सर्व पाढे आणि खेळ इंटरनेटशिवाय चालतात.'
+    pwaOfflineReady: '१००% ऑफलाइन तयार. सर्व पाढे आणि खेळ इंटरनेटशिवाय चालतात.',
+    installModalTitle: 'Smart Maths ॲप इन्स्टॉल करा',
+    installModalSubtitle: '१००% ऑफलाइन वापर आणि पूर्ण-स्क्रीन अध्यापनासाठी तुमच्या फोन, टॅब्लेट, स्मार्ट बोर्ड किंवा संगणकावर इन्स्टॉल करा.',
+    installNowBtn: 'आता ॲप इन्स्टॉल करा (1-Click)',
+    installHowToTitle: 'तुमच्या डिव्हाइसवर कसे इन्स्टॉल करावे:',
+    installAndroidStep: 'Android / Chrome: "आता ॲप इन्स्टॉल करा" वर टॅप करा किंवा मेनू (⋮) -> "App इन्स्टॉल करा" / "Add to Home screen" निवडा.',
+    installIosStep: 'iPhone / iPad (Safari): खाली शेअर बटण (⎋ / 📤) दाबा -> खाली स्क्रोल करा -> "Add to Home Screen" (+) निवडा.',
+    installDesktopStep: 'संगणक / स्मार्ट बोर्ड: ब्राउझरच्या ॲड्रेस बारमध्ये उजव्या बाजूला असलेल्या इन्स्टॉल चिन्हावर (⊕ / ⬇) क्लिक करा.',
+    installFeatureOffline: '⚡ १००% ऑफलाइन: इंटरनेटशिवाय कधीही पाढे आणि खेळ शिका.',
+    installFeatureFast: '🚀 त्वरित सुरू: जलद गतीने सुरू होते आणि गुण जतन राहतात.',
+    installFeatureSafe: '🎯 स्मार्ट बोर्ड तयार: वर्गखोल्यांसाठी अडथळा-मुक्त पूर्ण-स्क्रीन अनुभव.',
+    alreadyInstalled: 'Smart Maths ॲप या डिव्हाइसवर आधीच इन्स्टॉल आहे!',
+    close: 'बंद करा'
   },
   
   ur: {
-    appTitle: 'ریاضی لرننگ PWA',
+    appTitle: 'Smart Maths (Table and Numbers)',
     appSubtitle: 'کلاس رومز اور سمارٹ بورڈز کے لیے انٹرایکٹو ریاضی',
     tagline: 'بصری، دلچسپ اور پرلطف ریاضی کی مہارت',
     
@@ -685,6 +749,10 @@ export const translations: Record<Language, AppTranslation> = {
     autoRhythm: 'آٹو رِدم موڈ',
     autoRhythmOn: 'آٹو ردم: آن',
     autoRhythmOff: 'آٹو ردم: آف',
+    autoPlayNextTable: 'اگلا پہاڑہ خودکار پلے کریں',
+    autoPlayNextDesc: 'پہاڑہ مکمل ہونے پر خود بخود اگلے پہاڑے (۲ تا ۲۰) پر جائیں',
+    tableCompletedNextIn: 'پہاڑہ {table} مکمل! {sec} سیکنڈ میں اگلا پہاڑہ...',
+    singleScreenMode: 'سنگل سکرین میں فِٹ کریں',
     voiceMode: 'صوتی تلاوت موڈ (Voice)',
     voiceModeOn: 'وائس موڈ: آن (سن رہا ہے)',
     voiceModeOff: 'وائس موڈ: آف',
@@ -813,6 +881,18 @@ export const translations: Record<Language, AppTranslation> = {
     reducedMotion: 'کم اینیمیشن (Reduced Motion)',
     pwaInstall: '📱 ایپ انسٹال کریں (آف لائن استعمال کے لیے)',
     pwaInstalled: 'ایپ انسٹال ہے اور آف لائن تیار ہے',
-    pwaOfflineReady: '۱۰۰٪ آف لائن تیار۔ تمام پہاڑے، حسابات اور آوازیں بغیر انٹرنیٹ کے کام کرتی ہیں۔'
+    pwaOfflineReady: '۱۰۰٪ آف لائن تیار۔ تمام پہاڑے، حسابات اور آوازیں بغیر انٹرنیٹ کے کام کرتی ہیں۔',
+    installModalTitle: 'Smart Maths ایپ انسٹال کریں',
+    installModalSubtitle: 'فون، ٹیبلٹ، سمارٹ بورڈ یا کمپیوٹر پر ۱۰۰٪ آف لائن استعمال اور فل سکرین تدریس کے لیے انسٹال کریں۔',
+    installNowBtn: 'ابھی ایپ انسٹال کریں (1-Click)',
+    installHowToTitle: 'اپنے ڈیوائس پر کیسے انسٹال کریں:',
+    installAndroidStep: 'اینڈرائیڈ / کروم: "ابھی ایپ انسٹال کریں" پر ٹیپ کریں یا مینو (⋮) سے "App انسٹال کریں" یا "Add to Home screen" منتخب کریں۔',
+    installIosStep: 'آئی فون / آئی پیڈ (سفاری): نیچے شیئر بٹن (⎋ / 📤) دبائیں -> نیچے اسکرول کریں -> "Add to Home Screen" (+) منتخب کریں۔',
+    installDesktopStep: 'کمپیوٹر / سمارٹ بورڈ: براؤزر کے ایڈریس بار میں دائیں جانب موجود انسٹال آئیکن (⊕ / ⬇) پر کلک کریں۔',
+    installFeatureOffline: '⚡ ۱۰۰٪ آف لائن: انٹرنیٹ کے بغیر کہیں بھی پہاڑے اور کھیل سیکھیں۔',
+    installFeatureFast: '🚀 فوری اوپن: بغیر کسی تاخیر کے فوراً کھلتی ہے اور ریکارڈ محفوظ رہتا ہے۔',
+    installFeatureSafe: '🎯 سمارٹ بورڈ کے لیے تیار: کلاس رومز کے لیے فل سکرین بلاتعطل تدریس۔',
+    alreadyInstalled: 'Smart Maths ایپ اس ڈیوائس پر پہلے سے انسٹال ہے!',
+    close: 'بند کریں'
   }
 };

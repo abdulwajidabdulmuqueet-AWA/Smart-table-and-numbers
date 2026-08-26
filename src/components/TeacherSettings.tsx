@@ -22,11 +22,17 @@ import { sounds } from '../utils/audio';
 interface TeacherSettingsProps {
   settings: AppSettings;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
+  isInstalled?: boolean;
+  onOpenInstallModal?: () => void;
+  onInstallClick?: () => void;
 }
 
 export const TeacherSettings: React.FC<TeacherSettingsProps> = ({
   settings,
-  updateSettings
+  updateSettings,
+  isInstalled = false,
+  onOpenInstallModal,
+  onInstallClick
 }) => {
   const t = translations[settings.language];
   const isUrdu = settings.language === 'ur';
@@ -113,6 +119,28 @@ export const TeacherSettings: React.FC<TeacherSettingsProps> = ({
               >
                 <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
                   settings.classroomMode ? 'translate-x-5' : 'translate-x-0'
+                }`} />
+              </button>
+            </div>
+
+            {/* Auto-Play Next Table Toggle */}
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              <div>
+                <div className="font-black text-sm text-slate-800">{t.autoPlayNextTable}</div>
+                <div className="text-xs text-slate-500">{t.autoPlayNextDesc}</div>
+              </div>
+              <button
+                id="settings-autoplay-next-toggle"
+                onClick={() => {
+                  sounds.playClick();
+                  updateSettings({ autoPlayNextTable: !(settings.autoPlayNextTable ?? true) });
+                }}
+                className={`w-12 h-7 rounded-full p-1 transition-colors ${
+                  (settings.autoPlayNextTable ?? true) ? 'bg-emerald-600' : 'bg-slate-300'
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                  (settings.autoPlayNextTable ?? true) ? 'translate-x-5' : 'translate-x-0'
                 }`} />
               </button>
             </div>
@@ -280,19 +308,38 @@ export const TeacherSettings: React.FC<TeacherSettingsProps> = ({
 
       </div>
 
-      {/* Offline PWA Ready Info Banner */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-purple-900 to-indigo-950 text-white shadow-xl flex items-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
-          <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+      {/* Offline PWA Ready Info Banner with Install Action */}
+      <div className="p-6 rounded-3xl bg-gradient-to-r from-purple-900 via-indigo-950 to-slate-900 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-5 border border-purple-500/30">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+          </div>
+          <div>
+            <h4 className="text-base font-black">
+              {t.pwaOfflineReady}
+            </h4>
+            <p className="text-xs text-purple-200 mt-0.5 max-w-xl">
+              IndexedDB storage keeps all stars, badges, and recitation settings permanently available on classroom devices even when disconnected.
+            </p>
+          </div>
         </div>
-        <div>
-          <h4 className="text-base font-black">
-            {t.pwaOfflineReady}
-          </h4>
-          <p className="text-xs text-purple-200 mt-0.5">
-            IndexedDB storage keeps all stars, badges, and recitation settings permanently available on classroom devices even when disconnected.
-          </p>
-        </div>
+
+        <button
+          id="settings-install-pwa-btn"
+          onClick={() => {
+            sounds.playClick();
+            if (onOpenInstallModal) onOpenInstallModal();
+            else if (onInstallClick) onInstallClick();
+          }}
+          className="px-5 py-3 rounded-2xl bg-gradient-to-r from-pink-500 to-indigo-500 hover:from-pink-600 hover:to-indigo-600 font-extrabold text-xs sm:text-sm text-white shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2 whitespace-nowrap"
+        >
+          <Download className="w-4 h-4" />
+          <span>
+            {isInstalled
+              ? (isUrdu ? 'انسٹال شدہ (رہنمائی)' : 'Installed ✓ (Guide)')
+              : (isUrdu ? 'ایپ انسٹال کریں' : settings.language === 'hi' ? 'ऐप इंस्टॉल करें' : settings.language === 'mr' ? 'ॲप इन्स्टॉल करा' : 'Install App')}
+          </span>
+        </button>
       </div>
 
     </div>

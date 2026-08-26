@@ -10,7 +10,9 @@ import { NumberLearning } from './components/NumberLearning';
 import { NumberGames } from './components/NumberGames';
 import { ProgressDashboard } from './components/ProgressDashboard';
 import { TeacherSettings } from './components/TeacherSettings';
+import { InstallModal } from './components/InstallModal';
 import { translations } from './utils/translations';
+import confetti from 'canvas-confetti';
 import { 
   LayoutGrid, 
   BookOpen, 
@@ -18,7 +20,8 @@ import {
   Hash, 
   Award, 
   Settings as SettingsIcon,
-  Tv
+  Tv,
+  Download
 } from 'lucide-react';
 
 export default function App() {
@@ -28,13 +31,15 @@ export default function App() {
   const [selectedTable, setSelectedTable] = useState<number>(2);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState<boolean>(false);
+  const [isInstalled, setIsInstalled] = useState<boolean>(false);
+  const [showInstallModal, setShowInstallModal] = useState<boolean>(false);
 
   // Sync sound settings to audio engine
   useEffect(() => {
     sounds.setSoundEnabled(settings.soundEnabled);
   }, [settings.soundEnabled]);
 
-  // Handle PWA Install Prompt
+  // Handle PWA Install Prompt & Standalone Mode Check
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -44,19 +49,54 @@ export default function App() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
+    // Check if already launched in standalone PWA mode
+    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true) {
+      setIsInstalled(true);
+    }
+
+    const handleAppInstalled = () => {
+      setIsInstalled(true);
+      setIsInstallable(false);
+      setDeferredPrompt(null);
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+    };
+
+    window.addEventListener('appinstalled', handleAppInstalled);
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
   const handleInstallApp = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setIsInstallable(false);
+    sounds.playClick();
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+        setIsInstallable(false);
+        confetti({
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.6 }
+        });
+      }
+      setDeferredPrompt(null);
+    } else {
+      // If direct beforeinstallprompt is not available (e.g. iOS Safari, Chrome desktop if not pre-fired), open guidance modal
+      setShowInstallModal(true);
     }
-    setDeferredPrompt(null);
+  };
+
+  const handleOpenInstallModal = () => {
+    sounds.playClick();
+    setShowInstallModal(true);
   };
 
   // Update Settings with automatic persistence
@@ -98,7 +138,9 @@ export default function App() {
         currentView={currentView}
         setCurrentView={setCurrentView}
         isInstallable={isInstallable}
+        isInstalled={isInstalled}
         onInstallClick={handleInstallApp}
+        onOpenInstallModal={handleOpenInstallModal}
       />
 
       {/* Main Content Area */}
@@ -109,6 +151,9 @@ export default function App() {
             progress={progress}
             setCurrentView={setCurrentView}
             setSelectedTable={setSelectedTable}
+            isInstalled={isInstalled}
+            onOpenInstallModal={handleOpenInstallModal}
+            onInstallClick={handleInstallApp}
           />
         )}
 
@@ -168,9 +213,22 @@ export default function App() {
           <TeacherSettings
             settings={settings}
             updateSettings={updateSettings}
+            isInstalled={isInstalled}
+            onOpenInstallModal={handleOpenInstallModal}
+            onInstallClick={handleInstallApp}
           />
         )}
       </main>
+
+      {/* PWA Install Guide Modal */}
+      <InstallModal
+        isOpen={showInstallModal}
+        onClose={() => setShowInstallModal(false)}
+        isInstallable={isInstallable}
+        isInstalled={isInstalled}
+        onInstall={handleInstallApp}
+        settings={settings}
+      />
 
       {/* Bottom Floating Quick Bar (Enhanced for touch screens & mobile phones) */}
       <nav aria-label="Bottom Navigation" className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 flex justify-around items-center shadow-lg">

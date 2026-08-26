@@ -77,6 +77,7 @@ export interface AppSettings {
   customRhythmDelaySec: number;
   defaultTableRange: [number, number];
   speechRate: number;
+  autoPlayNextTable?: boolean;
 }
 
 export interface IndianPlaceValue {

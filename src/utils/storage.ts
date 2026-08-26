@@ -14,7 +14,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   rhythmSpeed: 'normal',
   customRhythmDelaySec: 2.0,
   defaultTableRange: [2, 20],
-  speechRate: 0.9
+  speechRate: 0.9,
+  autoPlayNextTable: true
 };
 
 export const DEFAULT_PROGRESS: UserProgress = {

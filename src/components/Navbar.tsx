@@ -26,48 +26,34 @@ interface NavbarProps {
   setCurrentView: (view: AppView) => void;
   settings: AppSettings;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
+  isInstallable?: boolean;
+  isInstalled?: boolean;
+  onInstallClick?: () => void;
+  onOpenInstallModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   setCurrentView,
   settings,
-  updateSettings
+  updateSettings,
+  isInstallable = false,
+  isInstalled = false,
+  onInstallClick,
+  onOpenInstallModal
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [installPrompt, setInstallPrompt] = useState<any>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
 
   const t = translations[settings.language];
   const isUrdu = settings.language === 'ur';
 
-  // Listen for PWA installation prompt
-  useEffect(() => {
-    const handleBeforeInstall = (e: any) => {
-      e.preventDefault();
-      setInstallPrompt(e);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setIsInstalled(true);
-    }
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
-    };
-  }, []);
-
-  const handleInstallClick = async () => {
+  const handleInstallPress = () => {
     sounds.playClick();
-    if (!installPrompt) return;
-    installPrompt.prompt();
-    const { outcome } = await installPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setIsInstalled(true);
-      setInstallPrompt(null);
+    if (onOpenInstallModal) {
+      onOpenInstallModal();
+    } else if (onInstallClick) {
+      onInstallClick();
     }
   };
 
@@ -202,17 +188,37 @@ export const Navbar: React.FC<NavbarProps> = ({
             {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
           </button>
 
-          {/* Install PWA Button (if available) */}
-          {installPrompt && !isInstalled && (
-            <button
-              id="install-pwa-btn"
-              onClick={handleInstallClick}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-bold shadow-sm hover:bg-purple-700 transition-all"
-            >
-              <Download className="w-4 h-4" />
-              <span>Install PWA</span>
-            </button>
-          )}
+          {/* Install App Button (Visible on Desktop & Tablet) */}
+          <button
+            id="install-pwa-btn"
+            onClick={handleInstallPress}
+            title={isInstalled ? t.pwaInstalled : t.installModalTitle}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-extrabold shadow-sm transition-all ${
+              isInstalled
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
+                : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-indigo-200 hover:scale-102 active:scale-95'
+            }`}
+          >
+            {isInstalled ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span className="hidden sm:inline">Installed ✓</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4 animate-bounce" />
+                <span>
+                  {settings.language === 'ur'
+                    ? 'ایپ انسٹال کریں'
+                    : settings.language === 'hi'
+                    ? 'ऐप इंस्टॉल करें'
+                    : settings.language === 'mr'
+                    ? 'ॲप इन्स्टॉल करा'
+                    : 'Install App'}
+                </span>
+              </>
+            )}
+          </button>
 
           {/* Mobile Menu Toggle */}
           <button
@@ -256,7 +262,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-white border-t border-slate-200 px-4 py-4 space-y-2 shadow-xl animate-in slide-in-from-top duration-200">
+        <div className="lg:hidden bg-white border-t border-slate-200 px-4 py-4 space-y-3 shadow-xl animate-in slide-in-from-top duration-200">
           <div className="grid grid-cols-2 gap-2">
             {navItems.map((item) => {
               const isActive = currentView === item.id;
@@ -284,15 +290,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             })}
           </div>
 
-          {installPrompt && !isInstalled && (
-            <button
-              onClick={handleInstallClick}
-              className="w-full mt-3 py-2.5 px-4 bg-purple-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-md"
-            >
-              <Download className="w-4 h-4" />
-              <span>Install Offline PWA</span>
-            </button>
-          )}
+          <button
+            id="mobile-drawer-install-btn"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              handleInstallPress();
+            }}
+            className={`w-full mt-2 py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-bold shadow-md transition-all ${
+              isInstalled
+                ? 'bg-emerald-600 text-white'
+                : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white'
+            }`}
+          >
+            <Download className="w-5 h-5" />
+            <span>
+              {isInstalled
+                ? (settings.language === 'ur' ? 'ایپ پہلے سے انسٹال ہے (تفصیلات)' : settings.language === 'hi' ? 'ऐप इंस्टॉल है (विवरण)' : 'App Installed (Offline Ready)')
+                : (settings.language === 'ur' ? '📱 ایپ انسٹال کریں (آف لائن استعمال)' : settings.language === 'hi' ? '📱 ऐप इंस्टॉल करें (ऑफलाइन उपयोग)' : settings.language === 'mr' ? '📱 ॲप इन्स्टॉल करा (ऑफलाइन)' : '📱 Install App (100% Offline)')}
+            </span>
+          </button>
         </div>
       )}
     </header>
