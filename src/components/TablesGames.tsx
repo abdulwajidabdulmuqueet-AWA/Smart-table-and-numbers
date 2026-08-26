@@ -26,6 +26,16 @@ interface TablesGamesProps {
   setProgress: (p: UserProgress) => void;
 }
 
+// Fisher-Yates uniform shuffle helper
+function shuffleArray<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 export const TablesGames: React.FC<TablesGamesProps> = ({
   settings,
   progress,
@@ -82,7 +92,7 @@ export const TablesGames: React.FC<TablesGamesProps> = ({
     return selectedTables.length > 0 ? selectedTables : [2, 3, 4, 5];
   };
 
-  // Helper: Generate Random Question
+  // Helper: Generate Random Question with uniform randomized option order
   const generateMCQQuestion = (type: 'find-answer' | 'missing-number') => {
     const pool = getTablePool();
     const table = pool[Math.floor(Math.random() * pool.length)];
@@ -91,10 +101,12 @@ export const TablesGames: React.FC<TablesGamesProps> = ({
 
     // Generate 3 plausible distractors
     const optionsSet = new Set<number>([answer]);
-    while (optionsSet.size < 4) {
+    let attempts = 0;
+    while (optionsSet.size < 4 && attempts < 35) {
+      attempts++;
       if (type === 'missing-number') {
-        const delta = Math.floor(Math.random() * 9) + 1;
-        optionsSet.add(delta);
+        const delta = Math.floor(Math.random() * 10) + 1;
+        if (delta !== answer) optionsSet.add(delta);
       } else {
         const wrongMult = Math.floor(Math.random() * 10) + 1;
         const wrongTable = pool[Math.floor(Math.random() * pool.length)];
@@ -102,17 +114,23 @@ export const TablesGames: React.FC<TablesGamesProps> = ({
         if (distractor !== answer && distractor > 0) {
           optionsSet.add(distractor);
         } else {
-          optionsSet.add(answer + (Math.random() > 0.5 ? table : -table || 2));
+          const delta = (Math.floor(Math.random() * 3) + 1) * (Math.random() > 0.5 ? 1 : -1);
+          const candidate = Math.max(2, answer + delta * table);
+          if (candidate !== answer) optionsSet.add(candidate);
         }
       }
     }
 
-    const options = Array.from(optionsSet).sort(() => Math.random() - 0.5);
+    while (optionsSet.size < 4) {
+      optionsSet.add(answer + (optionsSet.size * 2 + 1));
+    }
+
+    const options = shuffleArray(Array.from(optionsSet));
     setCurrentQuestion({ table, multiplier, answer, options, missingType: type === 'missing-number' ? 'factor' : 'product' });
     setFeedback(null);
   };
 
-  // Helper: Generate Falling Numbers Question
+  // Helper: Generate Falling Numbers Question (Answers randomized in distinct lanes & positions)
   const generateFallingQuestion = () => {
     const pool = getTablePool();
     const table = pool[Math.floor(Math.random() * pool.length)];
@@ -121,13 +139,53 @@ export const TablesGames: React.FC<TablesGamesProps> = ({
 
     setFallingTarget({ table, multiplier, answer });
 
-    // Create 4 falling bubbles across horizontal positions
-    const bubbles = [
-      { id: 1, value: answer, x: 20 + Math.random() * 15, y: 0, speed: 0.45 + Math.random() * 0.2 },
-      { id: 2, value: answer + table, x: 40 + Math.random() * 15, y: -15, speed: 0.4 + Math.random() * 0.2 },
-      { id: 3, value: Math.max(2, answer - table), x: 60 + Math.random() * 15, y: -30, speed: 0.5 + Math.random() * 0.2 },
-      { id: 4, value: (table + 1) * multiplier, x: 75 + Math.random() * 15, y: -45, speed: 0.45 + Math.random() * 0.2 }
-    ].sort(() => Math.random() - 0.5);
+    // Generate 3 distinct wrong candidate values
+    const distractorSet = new Set<number>();
+    const candidateDistractors = [
+      answer + table,
+      Math.max(2, answer - table),
+      (table + 1) * multiplier,
+      Math.max(2, (table - 1) * multiplier),
+      table * (multiplier > 1 ? multiplier - 1 : multiplier + 2),
+      (pool[Math.floor(Math.random() * pool.length)]) * (Math.floor(Math.random() * 10) + 1)
+    ];
+
+    for (const d of candidateDistractors) {
+      if (d !== answer && d > 0 && distractorSet.size < 3) {
+        distractorSet.add(d);
+      }
+    }
+
+    while (distractorSet.size < 3) {
+      const offset = (Math.floor(Math.random() * 4) + 1) * (Math.random() > 0.5 ? 1 : -1);
+      const fake = Math.max(2, answer + offset * (table > 2 ? 2 : 1));
+      if (fake !== answer) {
+        distractorSet.add(fake);
+      }
+    }
+
+    // 4 values with the correct answer placed uniformly at ANY of the 4 positions
+    const allValues = shuffleArray([answer, ...Array.from(distractorSet)]);
+
+    // 4 distinct horizontal lanes spread across the full width [15%, 38%, 62%, 85%] with random jitter
+    const laneCenters = [15, 38, 62, 85];
+    const shuffledLanes = shuffleArray(laneCenters);
+
+    // Initial random vertical spawn offsets
+    const yOffsets = shuffleArray([0, -15, -30, -45]);
+
+    const bubbles = allValues.map((val, idx) => {
+      const laneX = Math.min(88, Math.max(12, shuffledLanes[idx] + (Math.random() - 0.5) * 8));
+      const startY = yOffsets[idx] + (Math.random() - 0.5) * 6;
+      const speed = 0.42 + Math.random() * 0.22;
+      return {
+        id: Date.now() + idx + Math.random(),
+        value: val,
+        x: Math.round(laneX),
+        y: Math.round(startY),
+        speed
+      };
+    });
 
     setFallingBubbles(bubbles);
   };
@@ -151,11 +209,11 @@ export const TablesGames: React.FC<TablesGamesProps> = ({
       matched: false
     }));
 
-    const right = selectedPairs.map((p, index) => ({
+    const right = shuffleArray(selectedPairs.map((p, index) => ({
       id: index + 1,
       value: p.table * p.mult,
       matched: false
-    })).sort(() => Math.random() - 0.5);
+    })));
 
     setPairsLeft(left);
     setPairsRight(right);
@@ -181,7 +239,7 @@ export const TablesGames: React.FC<TablesGamesProps> = ({
     setFeedback(null);
   };
 
-  // Helper: Generate Memory Cards (6 pairs = 12 cards)
+  // Helper: Generate Memory Cards (4 pairs = 8 cards)
   const generateMemoryCards = () => {
     const pool = getTablePool();
     const pairs: { table: number; mult: number }[] = [];
@@ -200,7 +258,7 @@ export const TablesGames: React.FC<TablesGamesProps> = ({
       cards.push({ id: matchId * 2, label: `${p.table * p.mult}`, matchId, flipped: false, matched: false });
     });
 
-    setMemoryCards(cards.sort(() => Math.random() - 0.5));
+    setMemoryCards(shuffleArray(cards));
     setFlippedCardIds([]);
   };
 

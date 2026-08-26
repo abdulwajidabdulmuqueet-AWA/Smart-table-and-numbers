@@ -32,6 +32,16 @@ interface NumberGamesProps {
   defaultGame?: NumberGameType;
 }
 
+// Fisher-Yates uniform shuffle helper
+function shuffleArray<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 export const NumberGames: React.FC<NumberGamesProps> = ({
   settings,
   progress,
@@ -99,7 +109,7 @@ export const NumberGames: React.FC<NumberGamesProps> = ({
         : `Which number represents ${item.words}?`
     );
     setMcqAnswer(correctStr);
-    setMcqOptions(Array.from(distractorSet).sort(() => Math.random() - 0.5));
+    setMcqOptions(shuffleArray(Array.from(distractorSet)));
     setFeedback(null);
   };
 
@@ -129,7 +139,7 @@ export const NumberGames: React.FC<NumberGamesProps> = ({
         : `What is the Place Value of digit ${targetDigitObj.digit} in ${formatIndianNumber(num)}?`
     );
     setMcqAnswer(correctStr);
-    setMcqOptions(Array.from(distractorSet).sort(() => Math.random() - 0.5));
+    setMcqOptions(shuffleArray(Array.from(distractorSet)));
     setFeedback(null);
   };
 
@@ -141,7 +151,7 @@ export const NumberGames: React.FC<NumberGamesProps> = ({
       if (!digits.includes(d)) digits.push(d);
     }
     const target = Math.random() > 0.5 ? 'largest' : 'smallest';
-    setBuilderDigits(digits.sort(() => Math.random() - 0.5));
+    setBuilderDigits(shuffleArray(digits));
     setBuilderTarget(target);
     setUserArrangement([]);
     setFeedback(null);
@@ -175,7 +185,7 @@ export const NumberGames: React.FC<NumberGamesProps> = ({
 
     setMcqPrompt(`${formatIndianNumber(s1)}  →  ${formatIndianNumber(s2)}  →  ${formatIndianNumber(s3)}  →  ?`);
     setMcqAnswer(formatIndianNumber(correct));
-    setMcqOptions(Array.from(distractorSet).sort(() => Math.random() - 0.5));
+    setMcqOptions(shuffleArray(Array.from(distractorSet)));
     setFeedback(null);
   };
 
